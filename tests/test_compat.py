@@ -24,8 +24,14 @@ OFFICIAL_VERSIONS = [
 ]
 
 INVALID_BOTH = [
-    '1.2', '01.2.3', '1.02.3', '1.2.03', '1.2.3-01', '1.2.3.', 'a.b.c',
-    '', '1.2.3-', '1.2.3+', 'v1.2.3', '1.2.3..4', '1.2.3.dbg', '1.2.3.04',
+    '1.2', '1.2.3-01', '1.2.3.', 'a.b.c',
+    '', '1.2.3-', '1.2.3+', 'v1.2.3', '1.2.3..4', '1.2.3.dbg',
+]
+
+# Accepted by semverex (leading zeroes preserved in str()), rejected by
+# upstream — an intentional, pinned divergence. See ExtensionBoundaryTestCase.
+LEADING_ZERO_VERSIONS = [
+    '01.2.3', '1.02.3', '1.2.03', '1.2.3.04', '01.02.03.04',
 ]
 
 EXTENDED_VERSIONS = [
@@ -268,6 +274,18 @@ class ExtensionBoundaryTestCase(unittest.TestCase):
         # them extra patch components.
         self.assertEqual(str(semantic_version.Version.coerce('0.1.2.3')), '0.1.2+3')
         self.assertEqual(str(semverex.Version.coerce('0.1.2.3')), '0.1.2.3')
+
+    def test_leading_zero_divergence_is_intentional(self):
+        # Upstream rejects leading zeroes in numeric components; semverex
+        # accepts them and preserves the original spelling in str(), while
+        # the numeric value and comparisons stay normal.
+        for s in LEADING_ZERO_VERSIONS:
+            with self.assertRaises(ValueError, msg=s):
+                semantic_version.Version(s)
+            v = semverex.Version(s)
+            self.assertEqual(str(v), s)
+            self.assertTrue(semverex.validate(s))
+            self.assertFalse(semantic_version.validate(s))
 
 
 if __name__ == '__main__':

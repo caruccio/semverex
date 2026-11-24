@@ -34,13 +34,6 @@ from semantic_version.base import (
 )
 
 
-def _has_leading_zero(value):
-    return (value
-            and value[0] == '0'
-            and value.isdigit()
-            and value != '0')
-
-
 class Version(_BaseVersion):
     """A Semantic Version, optionally carrying extra patch components.
 
@@ -55,11 +48,16 @@ class Version(_BaseVersion):
         patch1, patch2, ...: read-only accessors for the extra components;
             ``None`` when the component is absent.
         prerelease, build, partial: unchanged from ``semantic_version.Version``.
+
+    Unlike upstream, leading zeroes in the numeric components are accepted
+    (``01.02.03.04``) and preserved by ``str()``; the stored values are
+    integers, so comparison, equality and hashing remain numeric
+    (``Version('01.2.3') == Version('1.2.3')``).
     """
 
-    # Extra components are strictly numeric and may not have leading zeroes
-    # (same rule as major/minor/patch). The whole extra chunk is captured as
-    # one group, then split on '.'.
+    # Extra components are strictly numeric; leading zeroes are accepted and
+    # preserved in ``str()``. The whole extra chunk is captured as one group,
+    # then split on '.'.
     version_re = re.compile(r'^(\d+)\.(\d+)\.(\d+)'
                             r'((?:\.\d+)*)'
                             r'(?:-([0-9a-zA-Z.-]+))?'
@@ -97,6 +95,15 @@ class Version(_BaseVersion):
 
         if has_text:
             major, minor, patch, patches, prerelease, build = self.parse(version_string, partial)
+            # Keep the original spelling of the numeric components so that
+            # str() preserves leading zeroes ('01.02.03' stays '01.02.03');
+            # the stored values are ints, so comparison stays numeric.
+            raw_core = version_string.split('-', 1)[0].split('+', 1)[0]
+            raw_parts = raw_core.split('.')
+            self._raw_parts = tuple(
+                raw_parts[i] if i < len(raw_parts) else None
+                for i in range(3 + len(patches))
+            )
         else:
             # Convenience: allow to omit patches/prerelease/build.
             patches = tuple(patches or ())
@@ -105,6 +112,8 @@ class Version(_BaseVersion):
                 build = tuple(build or ())
             self._validate_kwargs(major, minor, patch, patches, prerelease, build, partial)
             patches = tuple(int(p) for p in patches)
+            # No original spelling: kwargs are numeric.
+            self._raw_parts = None
 
         self.major = major
         self.minor = minor
@@ -151,8 +160,12 @@ class Version(_BaseVersion):
         """The extra patch components as a list of strings.
 
         ``Version('1.2.3.4.5').patches_str`` returns ``['4', '5']``; it is
-        ``[]`` for official versions without extra components.
+        ``[]`` for official versions without extra components. The original
+        spelling is kept when the version was parsed from a string, so
+        ``Version('1.2.3.04').patches_str`` returns ``['04']``.
         """
+        if self._raw_parts is not None:
+            return [part for part in self._raw_parts[3:] if part is not None]
         return [str(p) for p in self.patches]
 
     def _patches_key(self):
@@ -195,13 +208,9 @@ class Version(_BaseVersion):
 
         major, minor, patch, extras, prerelease, build = match.groups()
 
-        if _has_leading_zero(major):
-            raise ValueError("Invalid leading zero in major: %r" % version_string)
-        if _has_leading_zero(minor):
-            raise ValueError("Invalid leading zero in minor: %r" % version_string)
-        if _has_leading_zero(patch):
-            raise ValueError("Invalid leading zero in patch: %r" % version_string)
-
+        # Leading zeroes are accepted (unlike upstream): the components are
+        # converted to ints, and the original spelling is kept separately
+        # (see Version.__init__) for str().
         major = int(major)
         minor = cls._coerce(minor, partial)
         patch = cls._coerce(patch, partial)
@@ -211,11 +220,6 @@ class Version(_BaseVersion):
             patches = ()
         elif extras:
             extra_parts = [part for part in extras.split('.') if part]
-            for index, part in enumerate(extra_parts):
-                if _has_leading_zero(part):
-                    raise ValueError(
-                        "Invalid leading zero in patch%s: %r" % (index + 1, version_string)
-                    )
             patches = tuple(int(part) for part in extra_parts)
         else:
             patches = ()
@@ -460,13 +464,25 @@ class Version(_BaseVersion):
         return iter((self.major, self.minor, self.patch, self.prerelease, self.build))
 
     def __str__(self):
-        version = '%d' % self.major
-        if self.minor is not None:
-            version = '%s.%d' % (version, self.minor)
-        if self.patch is not None:
-            version = '%s.%d' % (version, self.patch)
-        if self.patches:
-            version = '%s.%s' % (version, '.'.join('%d' % p for p in self.patches))
+        if self._raw_parts is not None:
+            # Parsed from a string: preserve the original spelling (leading
+            # zeroes included). Slots for absent (partial) components are None.
+            version = '.'.join(
+                part
+                for part, value in zip(
+                    self._raw_parts,
+                    (self.major, self.minor, self.patch) + self.patches,
+                )
+                if value is not None
+            )
+        else:
+            version = '%d' % self.major
+            if self.minor is not None:
+                version = '%s.%d' % (version, self.minor)
+            if self.patch is not None:
+                version = '%s.%d' % (version, self.patch)
+            if self.patches:
+                version = '%s.%s' % (version, '.'.join('%d' % p for p in self.patches))
 
         if self.prerelease or (self.partial and self.prerelease == () and self.build is None):
             version = '%s-%s' % (version, '.'.join(self.prerelease))

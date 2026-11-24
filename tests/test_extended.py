@@ -110,9 +110,8 @@ class ParsingTestCase(unittest.TestCase):
 
     def test_invalid_strings(self):
         for bad in [
-                '1.2', '1.2.3.dbg', '01.2.3', '1.02.3', '1.2.03', '1.2.3.04',
-                '1.2.3..4', 'a.b.c', '', '1.2.3-', '1.2.3+', '1.2.3.4.',
-                'v1.2.3', '1.2.3.4-01']:
+                '1.2', '1.2.3.dbg', '1.2.3..4', 'a.b.c', '', '1.2.3-',
+                '1.2.3+', '1.2.3.4.', 'v1.2.3', '1.2.3.4-01']:
             with self.assertRaises(ValueError, msg=bad):
                 Version(bad)
 
@@ -132,6 +131,74 @@ class ParsingTestCase(unittest.TestCase):
             self.assertTrue(validate(version_string), msg=version_string)
         self.assertFalse(validate('1.2.3.dbg'))
         self.assertFalse(validate('1.2'))
+
+
+class LeadingZeroTestCase(unittest.TestCase):
+    """Leading zeroes in numeric components: accepted, preserved by str(),
+    numerically compared."""
+
+    def test_parse_fields_numeric(self):
+        v = Version('01.02.03.04.05')
+        self.assertEqual(
+            (v.major, v.minor, v.patch, v.patches),
+            (1, 2, 3, (4, 5)),
+        )
+        self.assertEqual(v.patch1, 4)
+        self.assertEqual(v.patch2, 5)
+
+    def test_str_preserves_original_spelling(self):
+        for s in ['01.2.3', '1.02.3', '1.2.03', '1.2.3.04', '01.02.03.04',
+                  '001.0002.0003']:
+            self.assertEqual(str(Version(s)), s, msg=s)
+
+    def test_equality_and_hash_are_numeric(self):
+        self.assertEqual(Version('01.2.3'), Version('1.2.3'))
+        self.assertEqual(Version('1.2.3.04'), Version('1.2.3.4'))
+        self.assertEqual(hash(Version('01.2.3')), hash(Version('1.2.3')))
+        self.assertEqual(hash(Version('1.2.3.04')), hash(Version('1.2.3.4')))
+
+    def test_comparison_is_numeric(self):
+        self.assertFalse(Version('01.2.3') < Version('1.2.3'))
+        self.assertFalse(Version('01.2.3') > Version('1.2.3'))
+        self.assertEqual(compare('01.2.3', '1.2.3'), 0)
+        self.assertLess(Version('01.2.3'), Version('1.2.4'))
+        self.assertLess(Version('1.2.3.04'), Version('1.2.3.5'))
+
+    def test_trailing_zero_interaction(self):
+        # Leading zeroes are cosmetic; trailing zeroes stay insignificant.
+        self.assertEqual(Version('1.2.3.00'), Version('1.2.3'))
+        self.assertEqual(str(Version('1.2.3.00')), '1.2.3.00')
+
+    def test_patches_str_preserves_spelling(self):
+        self.assertEqual(Version('1.2.3.04.05').patches_str, ['04', '05'])
+        self.assertEqual(Version('1.2.3').patches_str, [])
+
+    def test_partial_preserves_spelling(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            self.assertEqual(str(Version('01.02', partial=True)), '01.02')
+            v = Version('01.02.03.04-', partial=True)
+            self.assertEqual(str(v), '01.02.03.04-')
+            self.assertEqual((v.major, v.patch, v.patch1), (1, 3, 4))
+
+    def test_validate(self):
+        self.assertTrue(validate('01.02.03.04'))
+        self.assertTrue(validate('01.2.3'))
+
+    def test_kwargs_and_bumps_normalize(self):
+        # Versions built from kwargs (or returned by next_*) have no original
+        # spelling to preserve, so their str() is normalized.
+        v = Version('01.02.03.04')
+        self.assertEqual(str(v.next_patch()), '1.2.3.5')
+        self.assertEqual(str(v.next_minor()), '1.3.0')
+        self.assertEqual(str(v.truncate('patch')), '1.2.3.4')
+        self.assertEqual(str(Version(major=1, minor=2, patch=3, patches=(4,))), '1.2.3.4')
+        self.assertEqual(Version(major=1, minor=2, patch=3, patches=(4,)).patches_str, ['4'])
+
+    def test_specs_still_reject_leading_zeroes(self):
+        for bad in ['==01.2.3', '>=1.02.3', '~1.2.03']:
+            with self.assertRaises(ValueError, msg=bad):
+                SimpleSpec(bad)
 
 
 class OrderingTestCase(unittest.TestCase):
