@@ -1,0 +1,76 @@
+# syntax=docker/dockerfile:1
+
+# Session container for `make build-session` / `make start-session`: a
+# development environment that runs as the LOCAL HOST USER (same uid/gid as
+# the host, so files written to the mounted repo keep the correct ownership)
+# and carries the repo's session bootstrap file (SESSION.md), used to start a
+# new DeepSeek Coder session that continues the development.
+#
+# Tools included (only what the semverex project needs): python3 + pip (the
+# project is a pure-Python library; pip installs the semantic_version
+# dependency and runs the tests), git, bash, curl, the DeepSeek Code CLI
+# (@qingj/deepseekcode, exposed as `deepseek`) and ripgrep (the Grep tool of
+# the CLI resolves its binary at a fixed path inside the CLI's installation
+# directory). Everything ships inside the image — the session has no
+# dependencies on the host toolchain.
+#
+# Build:  make build-session   (or: docker build --build-arg UID=$(id -u) \
+#                                --build-arg GID=$(id -g) -f Dockerfile.session .)
+# Run:    make start-session
+
+FROM python:3.11-alpine
+
+ARG UID=1000
+ARG GID=1000
+
+# Toolchain: python3 + pip ship with the base image; curl is needed by the
+# downloads below; nodejs + npm install and run the DeepSeek Code CLI.
+RUN apk add --no-cache git bash ca-certificates tzdata curl nodejs npm \
+    && addgroup -g ${GID} dev \
+    && adduser -D -u ${UID} -G dev -h /workspace dev \
+    && mkdir -p /workspace && chown ${UID}:${GID} /workspace
+
+# DeepSeek Code CLI (@qingj/deepseekcode) — installed inside the image so
+# `make start-session` has no host dependencies. Version pinned to match the
+# host install. npm exposes `deepseekcode`/`deepseek-code`; add the
+# `deepseek` alias used by the Makefile.
+ARG DEEPSEEKCODE_VERSION=0.1.1
+RUN npm install -g @qingj/deepseekcode@${DEEPSEEKCODE_VERSION} --no-audit --no-fund \
+    && ln -s /usr/local/bin/deepseekcode /usr/local/bin/deepseek
+
+# ripgrep — the Grep tool in the DeepSeek Code CLI resolves its binary at
+# <dist>/vendor/ripgrep/<arch>-<platform>/rg; the npm package ships no
+# binaries, so install the matching static build at that exact path (same
+# version as the host install). Also exposed on PATH for direct use in the
+# dev loop.
+ARG RIPGREP_VERSION=15.2.0
+RUN case "$(uname -m)" in \
+      x86_64) RG_TARGET="x86_64-unknown-linux-musl"; RG_ARCH="x64" ;; \
+      aarch64) RG_TARGET="aarch64-unknown-linux-musl"; RG_ARCH="arm64" ;; \
+      *) echo "unsupported arch: $(uname -m)"; exit 1 ;; \
+    esac; \
+    curl -fsSLo /tmp/ripgrep.tar.gz \
+      "https://github.com/BurntSushi/ripgrep/releases/download/${RIPGREP_VERSION}/ripgrep-${RIPGREP_VERSION}-${RG_TARGET}.tar.gz" \
+    && tar -xzf /tmp/ripgrep.tar.gz -C /tmp \
+    && mkdir -p "/usr/local/lib/node_modules/@qingj/deepseekcode/dist/vendor/ripgrep/${RG_ARCH}-linux" \
+    && mv "/tmp/ripgrep-${RIPGREP_VERSION}-${RG_TARGET}/rg" \
+          "/usr/local/lib/node_modules/@qingj/deepseekcode/dist/vendor/ripgrep/${RG_ARCH}-linux/rg" \
+    && chmod +x "/usr/local/lib/node_modules/@qingj/deepseekcode/dist/vendor/ripgrep/${RG_ARCH}-linux/rg" \
+    && ln -s "/usr/local/lib/node_modules/@qingj/deepseekcode/dist/vendor/ripgrep/${RG_ARCH}-linux/rg" /usr/local/bin/rg \
+    && rm -rf /tmp/ripgrep.tar.gz "/tmp/ripgrep-${RIPGREP_VERSION}-${RG_TARGET}"
+
+# The session context travels with the image (the live repo copy is mounted
+# at /workspace by `make start-session`).
+COPY SESSION.md /session/SESSION.md
+
+USER ${UID}:${GID}
+WORKDIR /workspace
+
+# CMD (not ENTRYPOINT): `make start-session` passes `deepseek "Read ..."` as
+# the container command. With ENTRYPOINT ["/bin/bash"] docker would wrap it
+# into `bash deepseek ...`, and bash would run the CLI's .mjs as a shell
+# script, ignoring its node shebang ("import: command not found"). As CMD,
+# the explicit command replaces bash and is exec'd directly, so the shebang
+# is honored. `docker run -it IMAGE` (no command) still gives an interactive
+# bash by default.
+CMD ["/bin/bash"]

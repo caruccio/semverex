@@ -1,0 +1,8 @@
+[allowlists]
+description = "Exceções globais do projeto"
+paths= [
+  '''bin/.*''',
+  '''dist/.*''',
+  '''.*\.tar\.gz''',
+  '''.*\.swp'''
+]

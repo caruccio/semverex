@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semverex"
+version = "0.1.0"
+description = "Extended Semantic Versioning: a drop-in extension of python-semanticversion with extra patch components (patch1, patch2, ...)"
+readme = "README.md"
+license = { text = "BSD-2-Clause" }
+requires-python = ">=3.8"
+authors = [{ name = "semverex project" }]
+keywords = ["semantic", "version", "semver", "versioning", "extended"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Version Control",
+]
+dependencies = [
+    "semantic_version>=2.10,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/rbarrois/python-semanticversion"
+
+[tool.setuptools]
+packages = ["semverex"]
