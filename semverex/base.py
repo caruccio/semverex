@@ -52,7 +52,9 @@ class Version(_BaseVersion):
     Unlike upstream, leading zeroes in the numeric components are accepted
     (``01.02.03.04``) and preserved by ``str()``; the stored values are
     integers, so comparison, equality and hashing remain numeric
-    (``Version('01.2.3') == Version('1.2.3')``).
+    (``Version('01.2.3') == Version('1.2.3')``). The same applies to
+    kwargs-built versions: string components such as ``patch='05'`` are
+    accepted, normalized to ints, and keep their spelling in ``str()``.
     """
 
     # Extra components are strictly numeric; leading zeroes are accepted and
@@ -110,10 +112,28 @@ class Version(_BaseVersion):
             prerelease = tuple(prerelease or ())
             if not partial:
                 build = tuple(build or ())
+
+            # Numeric components may be given as ints or digit strings
+            # (leading zeroes included, e.g. patch='05'); they are normalized
+            # to ints, and string components keep their spelling in str().
+            raw_major, raw_minor, raw_patch, raw_patches = major, minor, patch, patches
+            try:
+                major = self._to_int(raw_major)
+                minor = self._coerce(raw_minor, partial)
+                patch = self._coerce(raw_patch, partial)
+                patches = tuple(int(p) for p in raw_patches)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    "Invalid kwargs to Version(major=%r, minor=%r, patch=%r, "
+                    "patches=%r, prerelease=%r, build=%r, partial=%r" % (
+                        raw_major, raw_minor, raw_patch, raw_patches,
+                        prerelease, build, partial,
+                    ))
+            self._raw_parts = tuple(
+                None if part is None else (part if isinstance(part, str) else str(int(part)))
+                for part in (raw_major, raw_minor, raw_patch) + raw_patches
+            )
             self._validate_kwargs(major, minor, patch, patches, prerelease, build, partial)
-            patches = tuple(int(p) for p in patches)
-            # No original spelling: kwargs are numeric.
-            self._raw_parts = None
 
         self.major = major
         self.minor = minor
@@ -249,14 +269,26 @@ class Version(_BaseVersion):
 
         return (major, minor, patch, patches, prerelease, build)
 
+    @staticmethod
+    def _to_int(value):
+        """Normalize a numeric component to int.
+
+        Digit strings (leading zeroes included, ``'05'``) and integral
+        numbers are accepted; junk strings and non-integral numbers are
+        rejected.
+        """
+        if isinstance(value, str):
+            value = int(value)
+        if value != int(value):
+            raise ValueError("Invalid numeric component: %r" % value)
+        return int(value)
+
     @classmethod
     def _validate_kwargs(cls, major, minor, patch, patches, prerelease, build, partial):
+        # Numeric components have already been normalized to ints by
+        # Version.__init__; only prerelease/build structure remains to check.
         if (
-                major != int(major)
-                or minor != cls._coerce(minor, partial)
-                or patch != cls._coerce(patch, partial)
-                or any(p != int(p) for p in patches)
-                or prerelease is None and not partial
+                prerelease is None and not partial
                 or build is None and not partial
         ):
             raise ValueError(

@@ -76,7 +76,9 @@ The public API mirrors upstream: `Version`, `SimpleSpec`, `NpmSpec`, `Spec`
 - Extra components are strictly numeric. Leading zeroes are accepted in all
   numeric components (`major`, `minor`, `patch` and the extras) and preserved
   by `str()`; the stored values are integers, so comparison, equality and
-  hashing stay numeric (`Version('01.2.3') == Version('1.2.3')`).
+  hashing stay numeric (`Version('01.2.3') == Version('1.2.3')`). String
+  kwargs work the same way: `Version(major='8', minor='322', patch='05')`
+  stores ints but renders as `'8.322.05'`.
 - **Trailing zeroes are insignificant** (PEP 440-style): `1.2.3`,
   `1.2.3.0` and `1.2.3.0.0` are the same version. `str()` preserves the
   original spelling.

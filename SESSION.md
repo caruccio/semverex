@@ -25,7 +25,8 @@ components after the patch level (`1.2.3.4`, `1.2.3.4.5-dbg.1+b`).
 - Trailing zeros in the extras are insignificant (`1.2.3 == 1.2.3.0`).
 - Leading zeros in the numeric components are accepted and preserved by
   `str()` (`01.02.03.04` stays `01.02.03.04`); comparison stays numeric.
-  Specs keep rejecting them (upstream rule).
+  String kwargs are accepted too (`patch='05'`). Specs keep rejecting
+  them (upstream rule).
 - `next_patch()` bumps the least significant component (`1.2.3.4` -> `1.2.3.5`).
 - Spec syntaxes registered as `'simple-ex'` / `'npm-ex'` (the upstream
   registry rejects duplicates of `'simple'`/`'npm'`).

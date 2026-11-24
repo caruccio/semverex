@@ -186,14 +186,35 @@ class LeadingZeroTestCase(unittest.TestCase):
         self.assertTrue(validate('01.2.3'))
 
     def test_kwargs_and_bumps_normalize(self):
-        # Versions built from kwargs (or returned by next_*) have no original
-        # spelling to preserve, so their str() is normalized.
+        # Versions built from int kwargs (or returned by next_*) have no
+        # original spelling to preserve, so their str() is normalized.
         v = Version('01.02.03.04')
         self.assertEqual(str(v.next_patch()), '1.2.3.5')
         self.assertEqual(str(v.next_minor()), '1.3.0')
         self.assertEqual(str(v.truncate('patch')), '1.2.3.4')
         self.assertEqual(str(Version(major=1, minor=2, patch=3, patches=(4,))), '1.2.3.4')
         self.assertEqual(Version(major=1, minor=2, patch=3, patches=(4,)).patches_str, ['4'])
+
+    def test_string_kwargs_preserve_spelling(self):
+        v = Version(major='8', minor='322', patch='05')
+        self.assertEqual(str(v), '8.322.05')
+        self.assertEqual((v.major, v.minor, v.patch), (8, 322, 5))
+        self.assertEqual(v, Version('8.322.5'))
+        self.assertEqual(hash(v), hash(Version('8.322.5')))
+
+        v = Version(major='01', minor='2', patch='3', patches=('04', '05'))
+        self.assertEqual(str(v), '01.2.3.04.05')
+        self.assertEqual(v.patches, (4, 5))
+        self.assertEqual(v.patches_str, ['04', '05'])
+
+    def test_string_kwargs_invalid(self):
+        for kwargs in [
+                dict(major='abc'), dict(major='8.5'), dict(major=8.5),
+                dict(major='1', minor='2x'), dict(major='1', patch='05a'),
+                dict(major='1', patches=('04x',)),
+        ]:
+            with self.assertRaises(ValueError, msg=kwargs):
+                Version(**kwargs)
 
     def test_specs_still_reject_leading_zeroes(self):
         for bad in ['==01.2.3', '>=1.02.3', '~1.2.03']:
