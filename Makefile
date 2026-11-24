@@ -29,6 +29,11 @@ bump: gitleaks ## Bump VERSION (Makefile) and the image tag (deploy/deployment.y
 	fi
 	sed -i -E 's|^(VERSION[[:space:]]*\?=[[:space:]]*).*|\1'"$$NEXT_VERSION"'|' Makefile
 	git commit -m "Bump version $$NEXT_VERSION" Makefile
+	git tag $$NEXT_VERSION
+
+release:
+	git push origin main
+	git push --tags
 
 gitleaks: ## Avoid secrets to leak
 	gitleaks git && gitleaks dir
