@@ -111,7 +111,8 @@ class ParsingTestCase(unittest.TestCase):
     def test_invalid_strings(self):
         for bad in [
                 '1.2', '1.2.3.dbg', '1.2.3..4', 'a.b.c', '', '1.2.3-',
-                '1.2.3+', '1.2.3.4.', 'v1.2.3', '1.2.3.4-01']:
+                '1.2.3+', '1.2.3.4.', '1.2.3.4-01', 'V1.2.3', 'v', 'vv1.2.3',
+                'v1.2.3v']:
             with self.assertRaises(ValueError, msg=bad):
                 Version(bad)
 
@@ -222,6 +223,72 @@ class LeadingZeroTestCase(unittest.TestCase):
                 SimpleSpec(bad)
 
 
+class VPrefixTestCase(unittest.TestCase):
+    """Optional lowercase 'v' prefix: accepted, preserved by str(),
+    numerically compared."""
+
+    def test_parse_fields_numeric(self):
+        v = Version('v1.2.3')
+        self.assertEqual((v.major, v.minor, v.patch, v.patches), (1, 2, 3, ()))
+        v = Version('v1.2.3.4.5')
+        self.assertEqual((v.major, v.patches), (1, (4, 5)))
+        self.assertEqual(v.patch1, 4)
+
+    def test_str_preserves_prefix(self):
+        for s in ['v1.2.3', 'v0.0.1', 'v1.2.3.4', 'v1.2.3-rc.1+b', 'v01.02.03']:
+            self.assertEqual(str(Version(s)), s, msg=s)
+
+    def test_prefix_is_cosmetic(self):
+        self.assertEqual(Version('v1.2.3'), Version('1.2.3'))
+        self.assertEqual(hash(Version('v1.2.3')), hash(Version('1.2.3')))
+        self.assertFalse(Version('v1.2.3') < Version('1.2.3'))
+        self.assertFalse(Version('v1.2.3') > Version('1.2.3'))
+        self.assertEqual(compare('v1.2.3', '1.2.3'), 0)
+        self.assertLess(Version('v1.2.3'), Version('1.2.4'))
+
+    def test_partial(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            self.assertEqual(str(Version('v1.2', partial=True)), 'v1.2')
+            v = Version('v1.2-', partial=True)
+            self.assertEqual(str(v), 'v1.2-')
+            self.assertEqual((v.major, v.minor), (1, 2))
+
+    def test_validate(self):
+        self.assertTrue(validate('v1.2.3'))
+        self.assertTrue(validate('v1.2.3.4'))
+        self.assertFalse(validate('V1.2.3'))
+
+    def test_bumps_drop_prefix(self):
+        # next_* build via kwargs, which carry no prefix.
+        self.assertEqual(str(Version('v1.2.3').next_patch()), '1.2.4')
+        self.assertEqual(str(Version('v1.2.3').next_minor()), '1.3.0')
+        self.assertEqual(str(Version('v1.2.3').truncate('patch')), '1.2.3')
+
+    def test_coerce(self):
+        self.assertEqual(str(Version.coerce('v1.2.3')), 'v1.2.3')
+        self.assertEqual(str(Version.coerce('v1')), 'v1.0.0')
+        self.assertEqual(str(Version.coerce('v1.2.3.4')), 'v1.2.3.4')
+        self.assertEqual(str(Version.coerce('v1.2.3-rc.1+b')), 'v1.2.3-rc.1+b')
+        self.assertEqual(str(Version.coerce('v01.2.3')), 'v1.2.3')
+        with self.assertRaises(ValueError):
+            Version.coerce('V1.2.3')
+
+    def test_specs_still_reject_v_components(self):
+        with self.assertRaises(ValueError):
+            SimpleSpec('==v1.2.3')
+        # ...but matching against v-prefixed versions works.
+        self.assertTrue(SimpleSpec('>=1.2.3').match(Version('v1.2.4')))
+        self.assertTrue(NpmSpec('^1.2.3').match(Version('v1.2.9')))
+
+    def test_mixed_spelling_roundtrip(self):
+        # 'v' + leading zeros: both preserved.
+        v = Version('v01.02.03.04')
+        self.assertEqual(str(v), 'v01.02.03.04')
+        self.assertEqual(v.patches_str, ['04'])
+        self.assertEqual(v, Version('1.2.3.4'))
+
+
 class OrderingTestCase(unittest.TestCase):
     def assert_order(self, sequence):
         versions = [Version(s) for s in sequence]
@@ -320,8 +387,6 @@ class BumpTruncateCoerceTestCase(unittest.TestCase):
         self.assertEqual(v.patch1, 4)
         # non-numeric extra components still become build data (upstream rule)
         self.assertEqual(str(Version.coerce('0.1.2.db')), '0.1.2+db')
-        with self.assertRaises(ValueError):
-            Version.coerce('v1.2.3')
 
 
 class SpecTestCase(unittest.TestCase):

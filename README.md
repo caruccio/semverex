@@ -41,6 +41,8 @@ Any number of extra numeric components is accepted (`1.2.3.4.5.6+build.7`);
 they are strictly numeric. Leading zeroes are accepted in the numeric
 components and preserved by `str()` (`01.02.03.04` stays `01.02.03.04`);
 comparison remains numeric (`Version('01.2.3') == Version('1.2.3')`).
+An optional lowercase `v` prefix is accepted and preserved the same way
+(`v1.2.3` stays `v1.2.3`, compares equal to `1.2.3`).
 
 ## Usage
 
@@ -126,10 +128,12 @@ Notes and caveats:
   components, so `semantic_version.Version('1.2.3') == semverex.Version('1.2.3.4')`
   is `True` on that side only. Comparisons with `semverex.Version` on the
   left are always correct.
-- Leading-zero components (`01.2.3`) are rejected by upstream but accepted
-  by semverex — an intentional divergence (`tests/test_compat.py` pins it).
-  Official SemVer strings (without leading zeroes) behave identically.
-  Specs (`SimpleSpec`/`NpmSpec`) keep rejecting leading zeroes.
+- Leading-zero components (`01.2.3`) and a leading `v` prefix (`v1.2.3`)
+  are rejected by upstream but accepted by semverex — intentional
+  divergences (`tests/test_compat.py` pins them). Official SemVer strings
+  behave identically. Specs (`SimpleSpec`/`NpmSpec`) keep rejecting
+  leading zeroes and `v` in their components (`NpmSpec` still strips a
+  leading `v` from spec expressions, as upstream does).
 
 ## Install / test
 

@@ -25,7 +25,7 @@ OFFICIAL_VERSIONS = [
 
 INVALID_BOTH = [
     '1.2', '1.2.3-01', '1.2.3.', 'a.b.c',
-    '', '1.2.3-', '1.2.3+', 'v1.2.3', '1.2.3..4', '1.2.3.dbg',
+    '', '1.2.3-', '1.2.3+', '1.2.3..4', '1.2.3.dbg',
 ]
 
 # Accepted by semverex (leading zeroes preserved in str()), rejected by
@@ -187,7 +187,7 @@ class CompatibilityTestCase(unittest.TestCase):
 
     def test_coerce(self):
         COERCE = ['0.1', '1', '1.2', '1.2.3', '1.2.3+b', '1.2.3-rc.1',
-                  '0.1+2-3+4_5', '1.2.3-rc+dbg', 'v1.2.3']
+                  '0.1+2-3+4_5', '1.2.3-rc+dbg']
 
         def op(lib):
             out = []
@@ -286,6 +286,21 @@ class ExtensionBoundaryTestCase(unittest.TestCase):
             self.assertEqual(str(v), s)
             self.assertTrue(semverex.validate(s))
             self.assertFalse(semantic_version.validate(s))
+
+    def test_v_prefix_divergence_is_intentional(self):
+        # Upstream rejects a leading 'v' (Version and coerce); semverex
+        # accepts it, preserves it in str(), and keeps comparisons numeric.
+        for s in ['v1.2.3', 'v0.0.1', 'v1.2.3.4']:
+            with self.assertRaises(ValueError, msg=s):
+                semantic_version.Version(s)
+            v = semverex.Version(s)
+            self.assertEqual(str(v), s)
+            self.assertTrue(semverex.validate(s))
+            self.assertFalse(semantic_version.validate(s))
+        with self.assertRaises(ValueError):
+            semantic_version.Version.coerce('v1.2.3')
+        self.assertEqual(str(semverex.Version.coerce('v1.2.3')), 'v1.2.3')
+        self.assertEqual(str(semverex.Version.coerce('v1')), 'v1.0.0')
 
 
 if __name__ == '__main__':

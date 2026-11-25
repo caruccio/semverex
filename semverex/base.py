@@ -55,16 +55,20 @@ class Version(_BaseVersion):
     (``Version('01.2.3') == Version('1.2.3')``). The same applies to
     kwargs-built versions: string components such as ``patch='05'`` are
     accepted, normalized to ints, and keep their spelling in ``str()``.
+    An optional lowercase ``v`` prefix is accepted and preserved too
+    (``Version('v1.2.3')`` renders as ``'v1.2.3'`` and compares equal to
+    ``Version('1.2.3')``).
     """
 
     # Extra components are strictly numeric; leading zeroes are accepted and
     # preserved in ``str()``. The whole extra chunk is captured as one group,
-    # then split on '.'.
-    version_re = re.compile(r'^(\d+)\.(\d+)\.(\d+)'
+    # then split on '.'. An optional lowercase 'v' prefix is accepted and
+    # preserved in ``str()`` as well.
+    version_re = re.compile(r'^(?:v)?(\d+)\.(\d+)\.(\d+)'
                             r'((?:\.\d+)*)'
                             r'(?:-([0-9a-zA-Z.-]+))?'
                             r'(?:\+([0-9a-zA-Z.-]+))?$')
-    partial_version_re = re.compile(r'^(\d+)'
+    partial_version_re = re.compile(r'^(?:v)?(\d+)'
                                     r'(?:\.(\d+)'
                                     r'(?:\.(\d+)'
                                     r'((?:\.\d+)*)?'
@@ -101,11 +105,16 @@ class Version(_BaseVersion):
             # str() preserves leading zeroes ('01.02.03' stays '01.02.03');
             # the stored values are ints, so comparison stays numeric.
             raw_core = version_string.split('-', 1)[0].split('+', 1)[0]
+            prefix = ''
+            if raw_core.startswith('v'):
+                prefix = 'v'
+                raw_core = raw_core[1:]
             raw_parts = raw_core.split('.')
             self._raw_parts = tuple(
                 raw_parts[i] if i < len(raw_parts) else None
                 for i in range(3 + len(patches))
             )
+            self._prefix = prefix
         else:
             # Convenience: allow to omit patches/prerelease/build.
             patches = tuple(patches or ())
@@ -133,6 +142,7 @@ class Version(_BaseVersion):
                 None if part is None else (part if isinstance(part, str) else str(int(part)))
                 for part in (raw_major, raw_minor, raw_patch) + raw_patches
             )
+            self._prefix = ''
             self._validate_kwargs(major, minor, patch, patches, prerelease, build, partial)
 
         self.major = major
@@ -207,6 +217,9 @@ class Version(_BaseVersion):
     def parse(cls, version_string, partial=False, coerce=False):
         """Parse a version string into a tuple of components:
            (major, minor, patch, patches, prerelease, build).
+
+        An optional leading ``v`` prefix is accepted and ignored here (the
+        ``Version`` object itself preserves it in ``str()``).
 
         Args:
             version_string (str), the version string to parse
@@ -308,9 +321,10 @@ class Version(_BaseVersion):
         Same rules as ``semantic_version.Version.coerce``, except that extra
         numeric components after the patch level become patch components
         (``coerce('0.1.2.3')`` yields ``0.1.2.3`` with ``patch1 == 3``)
-        instead of build data.
+        instead of build data, and an optional leading ``v`` prefix is
+        accepted and preserved (``coerce('v1.2.3')`` yields ``v1.2.3``).
         """
-        base_re = re.compile(r'^\d+(?:\.\d+)*')
+        base_re = re.compile(r'^(?:v)?\d+(?:\.\d+)*')
 
         match = base_re.match(version_string)
         if not match:
@@ -320,6 +334,10 @@ class Version(_BaseVersion):
             )
 
         version = version_string[:match.end()]
+        prefix = ''
+        if version.startswith('v'):
+            prefix = 'v'
+            version = version[1:]
         if not partial:
             # We need a not-partial version.
             while version.count('.') < 2:
@@ -331,6 +349,7 @@ class Version(_BaseVersion):
             part.lstrip('0') or '0'
             for part in version.split('.')
         )
+        version = prefix + version
 
         # Split the numeric core into major/minor/patch + extra patches.
         parts = version.split('.')
@@ -515,6 +534,9 @@ class Version(_BaseVersion):
                 version = '%s.%d' % (version, self.patch)
             if self.patches:
                 version = '%s.%s' % (version, '.'.join('%d' % p for p in self.patches))
+
+        if self._prefix:
+            version = self._prefix + version
 
         if self.prerelease or (self.partial and self.prerelease == () and self.build is None):
             version = '%s-%s' % (version, '.'.join(self.prerelease))
