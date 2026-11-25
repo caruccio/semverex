@@ -21,14 +21,15 @@ test: ## Run unit tests
 
 run: ## Run locally (dev mode)
 
-bump: gitleaks ## Bump VERSION (Makefile) and the image tag (deploy/deployment.yaml)
+bump: gitleaks ## Bump VERSION (Makefile), the Python package version (pyproject.toml) and create the git tag
 	@read -p 'Next version: ' -e -i "$(VERSION)" NEXT_VERSION
 	if [ "$(VERSION)" == "$$NEXT_VERSION" ]; then
 		echo "Error: same version"
 		exit 1
 	fi
 	sed -i -E 's|^(VERSION[[:space:]]*\?=[[:space:]]*).*|\1'"$$NEXT_VERSION"'|' Makefile
-	git commit -m "Bump version $$NEXT_VERSION" Makefile
+	sed -i -E 's|^(version[[:space:]]*=[[:space:]]*")[^"]*(")|\1'"$$NEXT_VERSION"'\2|' pyproject.toml
+	git commit -m "Bump version $$NEXT_VERSION" Makefile pyproject.toml
 	git tag $$NEXT_VERSION
 
 release:
