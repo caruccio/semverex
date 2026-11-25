@@ -203,16 +203,16 @@ class Version(_BaseVersion):
 
     @property
     def patches_str(self):
-        """The extra patch components as a list of strings.
+        """The extra patch components joined by ``.``, keeping their spelling.
 
-        ``Version('1.2.3.4.5').patches_str`` returns ``['4', '5']``; it is
-        ``[]`` for official versions without extra components. The original
+        ``Version('1.2.3.4.5').patches_str`` returns ``'4.5'``; it is
+        ``''`` for official versions without extra components. The original
         spelling is kept when the version was parsed from a string, so
-        ``Version('1.2.3.04').patches_str`` returns ``['04']``.
+        ``Version('1.2.3.04').patches_str`` returns ``'04'``.
         """
         if self._raw_parts is not None:
-            return [part for part in self._raw_parts[3:] if part is not None]
-        return [str(p) for p in self.patches]
+            return '.'.join(part for part in self._raw_parts[3:] if part is not None)
+        return '.'.join(str(p) for p in self.patches)
 
     @property
     def flags(self):
@@ -239,6 +239,43 @@ class Version(_BaseVersion):
             name if value is None else '%s=%s' % (name, value)
             for name, value in self._flags_raw
         ]
+
+    def to_dict(self):
+        """All version components as a dict, with string values.
+
+        Numeric components are returned as strings, keeping the spelling
+        given to the constructor (leading zeroes included); prerelease and
+        build are tuples of identifier strings; ``flags`` is a dict of
+        string-or-``None`` values:
+
+        ``Version('v01.2.3.04-dbg!ch=beta').to_dict()`` returns
+        ``{'major': '01', 'minor': '2', 'patch': '3', 'patches': ('04',),
+        'patches_str': '04', 'prerelease': ('dbg',), 'build': (),
+        'flags': {'ch': 'beta'}, 'flags_str': ['ch=beta'], 'prefix': 'v'}``.
+
+        For versions built from kwargs the numeric components are formatted
+        from their int values (``'1'``, ``'2'``, ...).
+        """
+        if self._raw_parts is not None:
+            major, minor, patch = self._raw_parts[0], self._raw_parts[1], self._raw_parts[2]
+            patches = tuple(part for part in self._raw_parts[3:] if part is not None)
+        else:
+            major = str(self.major)
+            minor = None if self.minor is None else str(self.minor)
+            patch = None if self.patch is None else str(self.patch)
+            patches = tuple(str(p) for p in self.patches)
+        return {
+            'major': major,
+            'minor': minor,
+            'patch': patch,
+            'patches': patches,
+            'patches_str': '.'.join(patches),
+            'prerelease': self.prerelease,
+            'build': self.build,
+            'flags': self.flags,
+            'flags_str': self.flags_str,
+            'prefix': self._prefix,
+        }
 
     @staticmethod
     def _split_flags(version_string):

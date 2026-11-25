@@ -61,8 +61,9 @@ v.major, v.minor, v.patch   # 1, 2, 3          (unchanged field names)
 v.patch1                    # 4                (first extra component)
 v.patch2                    # None
 v.patches                   # (4,)
-v.patches_str               # ['4']            (extra components as strings)
+v.patches_str               # '4'              (extra components joined by '.')
 v.prerelease                # ('dbg', '1')
+v.to_dict()                 # all components as a dict
 str(v)                      # '1.2.3.4-dbg.1'
 
 semverex.Version('1.2.3') < semverex.Version('1.2.3.4')   # True
@@ -81,7 +82,8 @@ The public API mirrors upstream: `Version`, `SimpleSpec`, `NpmSpec`, `Spec`
 - The **first** component keeps its historical name, `patch` (there is no
   `patch0`); the extra components are `patch1`, `patch2`, ... and the
   `patches` tuple. Absent components read as `None`. `patches_str` returns
-  the same components as a list of strings (`['4', '5']` for `1.2.3.4.5`).
+  the same components joined by `.` (`'4.5'` for `1.2.3.4.5`; `''` when
+  there are no extras).
 - Extra components are strictly numeric. Leading zeroes are accepted in all
   numeric components (`major`, `minor`, `patch` and the extras) and preserved
   by `str()`; the stored values are integers, so comparison, equality and

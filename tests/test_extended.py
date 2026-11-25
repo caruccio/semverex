@@ -86,14 +86,45 @@ class ParsingTestCase(unittest.TestCase):
             v.unknown_attribute
 
     def test_patches_str(self):
-        self.assertEqual(Version('1.2.3.4.5').patches_str, ['4', '5'])
-        self.assertEqual(Version('1.2.3.4').patches_str, ['4'])
-        self.assertEqual(Version('1.2.3').patches_str, [])
-        self.assertEqual(Version('1.2.3.10').patches_str, ['10'])
-        # always a list, even for kwargs-built versions
+        self.assertEqual(Version('1.2.3.4.5').patches_str, '4.5')
+        self.assertEqual(Version('1.2.3.4').patches_str, '4')
+        self.assertEqual(Version('1.2.3').patches_str, '')
+        self.assertEqual(Version('1.2.3.10').patches_str, '10')
+        # always a string, even for kwargs-built versions
         v = Version(major=1, minor=2, patch=3, patches=(7, 8))
-        self.assertEqual(v.patches_str, ['7', '8'])
-        self.assertIsInstance(v.patches_str, list)
+        self.assertEqual(v.patches_str, '7.8')
+        self.assertIsInstance(v.patches_str, str)
+
+    def test_to_dict(self):
+        v = Version('v01.2.3.04-dbg!ch=beta')
+        self.assertEqual(v.to_dict(), {
+            'major': '01', 'minor': '2', 'patch': '3',
+            'patches': ('04',), 'patches_str': '04',
+            'prerelease': ('dbg',), 'build': (),
+            'flags': {'ch': 'beta'}, 'flags_str': ['ch=beta'],
+            'prefix': 'v',
+        })
+        # numeric components come as strings, with the constructor spelling
+        self.assertIsInstance(v.to_dict()['major'], str)
+
+        v = Version(major=1, minor=2, patch=3)
+        self.assertEqual(v.to_dict(), {
+            'major': '1', 'minor': '2', 'patch': '3',
+            'patches': (), 'patches_str': '',
+            'prerelease': (), 'build': (),
+            'flags': {}, 'flags_str': [],
+            'prefix': '',
+        })
+        # string kwargs keep their spelling too
+        v = Version(major='08', minor='322', patch='05', patches=('04',))
+        self.assertEqual(v.to_dict()['major'], '08')
+        self.assertEqual(v.to_dict()['patch'], '05')
+        self.assertEqual(v.to_dict()['patches'], ('04',))
+        self.assertIsInstance(v.to_dict(), dict)
+        # the flags dict is a fresh copy
+        d = v.to_dict()
+        d['flags']['x'] = 1
+        self.assertEqual(v.flags, {})
 
     def test_patchn_accessors_official_version(self):
         v = Version('1.2.3')
@@ -171,8 +202,8 @@ class LeadingZeroTestCase(unittest.TestCase):
         self.assertEqual(str(Version('1.2.3.00')), '1.2.3.00')
 
     def test_patches_str_preserves_spelling(self):
-        self.assertEqual(Version('1.2.3.04.05').patches_str, ['04', '05'])
-        self.assertEqual(Version('1.2.3').patches_str, [])
+        self.assertEqual(Version('1.2.3.04.05').patches_str, '04.05')
+        self.assertEqual(Version('1.2.3').patches_str, '')
 
     def test_partial_preserves_spelling(self):
         with warnings.catch_warnings():
@@ -194,7 +225,7 @@ class LeadingZeroTestCase(unittest.TestCase):
         self.assertEqual(str(v.next_minor()), '1.3.0')
         self.assertEqual(str(v.truncate('patch')), '1.2.3.4')
         self.assertEqual(str(Version(major=1, minor=2, patch=3, patches=(4,))), '1.2.3.4')
-        self.assertEqual(Version(major=1, minor=2, patch=3, patches=(4,)).patches_str, ['4'])
+        self.assertEqual(Version(major=1, minor=2, patch=3, patches=(4,)).patches_str, '4')
 
     def test_string_kwargs_preserve_spelling(self):
         v = Version(major='8', minor='322', patch='05')
@@ -206,7 +237,7 @@ class LeadingZeroTestCase(unittest.TestCase):
         v = Version(major='01', minor='2', patch='3', patches=('04', '05'))
         self.assertEqual(str(v), '01.2.3.04.05')
         self.assertEqual(v.patches, (4, 5))
-        self.assertEqual(v.patches_str, ['04', '05'])
+        self.assertEqual(v.patches_str, '04.05')
 
     def test_string_kwargs_invalid(self):
         for kwargs in [
@@ -285,7 +316,7 @@ class VPrefixTestCase(unittest.TestCase):
         # 'v' + leading zeros: both preserved.
         v = Version('v01.02.03.04')
         self.assertEqual(str(v), 'v01.02.03.04')
-        self.assertEqual(v.patches_str, ['04'])
+        self.assertEqual(v.patches_str, '04')
         self.assertEqual(v, Version('1.2.3.4'))
 
 

@@ -19,7 +19,7 @@ components after the patch level (`1.2.3.4`, `1.2.3.4.5-dbg.1+b`).
 
 - The first component stays `patch` (**no** `patch0`) — backward compatibility
   with existing client code. Extras are `patch1`, `patch2`, ..., the `patches`
-  tuple, and the `patches_str` list.
+  tuple, and the `patches_str` string (extras joined with '.').
 - Drop-in replacement: `import semverex` must behave exactly like
   `import semantic_version` for official SemVer (enforced by test_compat.py).
 - Trailing zeros in the extras are insignificant (`1.2.3 == 1.2.3.0`).
