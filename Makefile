@@ -1,6 +1,6 @@
 # Build, package and deploy the app.
 
-VERSION       ?= 0.0.4
+VERSION       ?= 0.1.0
 SESSION_IMAGE ?= semverex-session
 DEEPSEEK      ?= deepseek
 
