@@ -245,12 +245,13 @@ class Version(_BaseVersion):
 
         Numeric components are returned as strings, keeping the spelling
         given to the constructor (leading zeroes included); prerelease and
-        build are tuples of identifier strings; ``flags`` is a dict of
-        string-or-``None`` values:
+        build are the identifiers joined by ``.`` (``''`` when absent,
+        ``None`` when not given in a partial version); ``flags`` is a dict
+        of string-or-``None`` values:
 
         ``Version('v01.2.3.04-dbg!ch=beta').to_dict()`` returns
         ``{'major': '01', 'minor': '2', 'patch': '3', 'patches': ('04',),
-        'patches_str': '04', 'prerelease': ('dbg',), 'build': (),
+        'patches_str': '04', 'prerelease': 'dbg', 'build': '',
         'flags': {'ch': 'beta'}, 'flags_str': ['ch=beta'], 'prefix': 'v'}``.
 
         For versions built from kwargs the numeric components are formatted
@@ -264,14 +265,16 @@ class Version(_BaseVersion):
             minor = None if self.minor is None else str(self.minor)
             patch = None if self.patch is None else str(self.patch)
             patches = tuple(str(p) for p in self.patches)
+        prerelease = None if self.prerelease is None else '.'.join(self.prerelease)
+        build = None if self.build is None else '.'.join(self.build)
         return {
             'major': major,
             'minor': minor,
             'patch': patch,
             'patches': patches,
             'patches_str': '.'.join(patches),
-            'prerelease': self.prerelease,
-            'build': self.build,
+            'prerelease': prerelease,
+            'build': build,
             'flags': self.flags,
             'flags_str': self.flags_str,
             'prefix': self._prefix,

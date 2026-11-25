@@ -100,7 +100,7 @@ class ParsingTestCase(unittest.TestCase):
         self.assertEqual(v.to_dict(), {
             'major': '01', 'minor': '2', 'patch': '3',
             'patches': ('04',), 'patches_str': '04',
-            'prerelease': ('dbg',), 'build': (),
+            'prerelease': 'dbg', 'build': '',
             'flags': {'ch': 'beta'}, 'flags_str': ['ch=beta'],
             'prefix': 'v',
         })
@@ -111,10 +111,20 @@ class ParsingTestCase(unittest.TestCase):
         self.assertEqual(v.to_dict(), {
             'major': '1', 'minor': '2', 'patch': '3',
             'patches': (), 'patches_str': '',
-            'prerelease': (), 'build': (),
+            'prerelease': '', 'build': '',
             'flags': {}, 'flags_str': [],
             'prefix': '',
         })
+        # multi-identifier prerelease/build are joined by '.'
+        v = Version('1.2.3-rc.1+b.2')
+        self.assertEqual(v.to_dict()['prerelease'], 'rc.1')
+        self.assertEqual(v.to_dict()['build'], 'b.2')
+        # partial versions without prerelease/build keep None
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            v = Version('1.2', partial=True)
+        self.assertIsNone(v.to_dict()['prerelease'])
+        self.assertIsNone(v.to_dict()['build'])
         # string kwargs keep their spelling too
         v = Version(major='08', minor='322', patch='05', patches=('04',))
         self.assertEqual(v.to_dict()['major'], '08')
