@@ -289,6 +289,103 @@ class VPrefixTestCase(unittest.TestCase):
         self.assertEqual(v, Version('1.2.3.4'))
 
 
+class FlagsTestCase(unittest.TestCase):
+    """Version flags ('!name[=value]'): preserved by str(), ignored by
+    comparisons and calculations."""
+
+    def test_basic_flags(self):
+        v = Version('1.2.3!dbg')
+        self.assertEqual(str(v), '1.2.3!dbg')
+        self.assertEqual(v.flags, {'dbg': None})
+        self.assertEqual(v.flags_str, ['dbg'])
+
+        v = Version('1.2.3!dbg!channel=beta')
+        self.assertEqual(v.flags, {'dbg': None, 'channel': 'beta'})
+        self.assertEqual(v.flags_str, ['dbg', 'channel=beta'])
+
+    def test_empty_value(self):
+        v = Version('1.2.3!a=')
+        self.assertEqual(str(v), '1.2.3!a=')
+        self.assertEqual(v.flags, {'a': ''})
+        self.assertEqual(v.flags_str, ['a='])
+
+    def test_repeated_names_last_wins(self):
+        v = Version('1.2.3!a=1!a=2')
+        self.assertEqual(v.flags, {'a': '2'})
+        # ...but str() preserves the original spelling and order.
+        self.assertEqual(str(v), '1.2.3!a=1!a=2')
+        self.assertEqual(v.flags_str, ['a=1', 'a=2'])
+
+    def test_value_may_contain_almost_anything(self):
+        for s in ['1.2.3!u=a+b.c-d_e', '1.2.3!u=x=y', '1.2.3!u=1.2.3']:
+            self.assertEqual(str(Version(s)), s, msg=s)
+
+    def test_flags_combine_with_other_features(self):
+        s = 'v01.02.03.04-rc.1+b!dbg!ch=beta'
+        v = Version(s)
+        self.assertEqual(str(v), s)
+        self.assertEqual((v.major, v.patches), (1, (4,)))
+        self.assertEqual(v.flags, {'dbg': None, 'ch': 'beta'})
+
+    def test_flags_ignored_in_comparisons(self):
+        self.assertEqual(Version('1.2.3!dbg'), Version('1.2.3'))
+        self.assertEqual(hash(Version('1.2.3!dbg')), hash(Version('1.2.3')))
+        self.assertEqual(compare('1.2.3!a', '1.2.3!b'), 0)
+        self.assertFalse(Version('1.2.3!a') < Version('1.2.3!b'))
+        self.assertLess(Version('1.2.3!a'), Version('1.2.4'))
+
+    def test_flags_ignored_in_calculations(self):
+        # next_* build via kwargs and carry no flags.
+        self.assertEqual(str(Version('1.2.3!dbg').next_patch()), '1.2.4')
+        self.assertEqual(str(Version('1.2.3.4!dbg').next_patch()), '1.2.3.5')
+        self.assertEqual(str(Version('1.2.3!dbg').truncate('patch')), '1.2.3')
+
+    def test_partial(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            self.assertEqual(str(Version('1.2!x', partial=True)), '1.2!x')
+            v = Version('1.2.3-!x', partial=True)
+            self.assertEqual(str(v), '1.2.3-!x')
+            self.assertEqual(v.flags, {'x': None})
+
+    def test_kwargs_flags(self):
+        v = Version(major=1, minor=2, patch=3, flags=(('dbg', None), ('ch', 'beta')))
+        self.assertEqual(str(v), '1.2.3!dbg!ch=beta')
+        self.assertEqual(v.flags, {'dbg': None, 'ch': 'beta'})
+        self.assertEqual(v.flags_str, ['dbg', 'ch=beta'])
+
+        v = Version(major=1, minor=2, patch=3, flags={'a': '1', 'b': ''})
+        self.assertEqual(str(v), '1.2.3!a=1!b=')
+        v = Version(major=1, minor=2, patch=3)  # flags optional
+        self.assertEqual(v.flags, {})
+        self.assertEqual(v.flags_str, [])
+
+    def test_kwargs_flags_invalid(self):
+        for bad in [
+                (('bad name',),), (('a', 'x!y'),), (('a', 1),),
+                (('', None),), ('ab',), (('a',),),
+        ]:
+            with self.assertRaises(ValueError, msg=bad):
+                Version(major=1, minor=2, patch=3, flags=bad)
+
+    def test_validate(self):
+        for good in ['1.2.3!dbg', '1.2.3!a=1!b=2', 'v1.2.3.4-rc+b!x=']:
+            self.assertTrue(validate(good), msg=good)
+        for bad in ['1.2.3!', '1.2.3!a b', '1.2.3!a!', '1.2.3!=x']:
+            self.assertFalse(validate(bad), msg=bad)
+
+    def test_specs_match_flag_versions(self):
+        self.assertTrue(SimpleSpec('>=1.2.3').match(Version('1.2.4!dbg')))
+        self.assertTrue(NpmSpec('~1.2').match(Version('1.2.9!x=1')))
+        self.assertTrue(SimpleSpec('==1.2.3').match(Version('1.2.3!a')))
+        self.assertFalse(SimpleSpec('<1.2.3').match(Version('1.2.3!a')))
+
+    def test_invalid_flag_forms_rejected_by_version(self):
+        for bad in ['1.2.3!', '1.2.3!!a', '1.2.3!a b=1', '1.2.3!a=1!']:
+            with self.assertRaises(ValueError, msg=bad):
+                Version(bad)
+
+
 class OrderingTestCase(unittest.TestCase):
     def assert_order(self, sequence):
         versions = [Version(s) for s in sequence]

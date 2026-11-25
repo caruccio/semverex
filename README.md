@@ -44,6 +44,13 @@ comparison remains numeric (`Version('01.2.3') == Version('1.2.3')`).
 An optional lowercase `v` prefix is accepted and preserved the same way
 (`v1.2.3` stays `v1.2.3`, compares equal to `1.2.3`).
 
+Version **flags** may follow the version: one or more `!name[=value]`
+sections (`1.2.3!dbg!channel=beta`). The name matches `[a-zA-Z0-9._-]+`;
+the value is any text without `!` (optional, may be empty). Flags are
+preserved by `str()`, exposed as `v.flags` (dict, last occurrence wins)
+and `v.flags_str` (ordered list of strings), and are ignored in all
+comparisons and calculations.
+
 ## Usage
 
 ```python
@@ -91,6 +98,11 @@ The public API mirrors upstream: `Version`, `SimpleSpec`, `NpmSpec`, `Spec`
   reset the extras. `truncate('patch')` keeps the extra components.
 - `coerce()` maps extra numeric components to patches
   (`coerce('0.1.2.3')` → `0.1.2.3`), instead of upstream's build-data mapping.
+- Flags (`!name[=value]`) are metadata only: they ride along in `str()`,
+  are exposed via `v.flags` / `v.flags_str`, and never affect ordering,
+  equality, hashing or bumping (`1.2.3!dbg` == `1.2.3`). Repeated names
+  are allowed; the last occurrence wins in `v.flags`, while `str()`
+  preserves the original order and spelling.
 
 ## Specification matching
 
@@ -128,12 +140,13 @@ Notes and caveats:
   components, so `semantic_version.Version('1.2.3') == semverex.Version('1.2.3.4')`
   is `True` on that side only. Comparisons with `semverex.Version` on the
   left are always correct.
-- Leading-zero components (`01.2.3`) and a leading `v` prefix (`v1.2.3`)
-  are rejected by upstream but accepted by semverex — intentional
-  divergences (`tests/test_compat.py` pins them). Official SemVer strings
-  behave identically. Specs (`SimpleSpec`/`NpmSpec`) keep rejecting
-  leading zeroes and `v` in their components (`NpmSpec` still strips a
-  leading `v` from spec expressions, as upstream does).
+- Leading-zero components (`01.2.3`), a leading `v` prefix (`v1.2.3`) and
+  version flags (`1.2.3!dbg`) are rejected by upstream but accepted by
+  semverex — intentional divergences (`tests/test_compat.py` pins them).
+  Official SemVer strings behave identically. Specs
+  (`SimpleSpec`/`NpmSpec`) keep rejecting leading zeroes and `v` in their
+  components (`NpmSpec` still strips a leading `v` from spec expressions,
+  as upstream does).
 
 ## Install / test
 

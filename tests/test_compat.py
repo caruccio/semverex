@@ -302,6 +302,18 @@ class ExtensionBoundaryTestCase(unittest.TestCase):
         self.assertEqual(str(semverex.Version.coerce('v1.2.3')), 'v1.2.3')
         self.assertEqual(str(semverex.Version.coerce('v1')), 'v1.0.0')
 
+    def test_flags_divergence_is_intentional(self):
+        # Upstream rejects '!' in version strings; semverex uses trailing
+        # '!name[=value]' sections as flags, preserved by str() and ignored
+        # in comparisons.
+        for s in ['1.2.3!dbg', '1.2.3!a=1!b=2', 'v1.2.3.4+b!x=']:
+            with self.assertRaises(ValueError, msg=s):
+                semantic_version.Version(s)
+            v = semverex.Version(s)
+            self.assertEqual(str(v), s)
+            self.assertTrue(semverex.validate(s))
+            self.assertFalse(semantic_version.validate(s))
+
 
 if __name__ == '__main__':
     unittest.main()

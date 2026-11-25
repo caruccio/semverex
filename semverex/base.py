@@ -48,6 +48,8 @@ class Version(_BaseVersion):
         patch1, patch2, ...: read-only accessors for the extra components;
             ``None`` when the component is absent.
         prerelease, build, partial: unchanged from ``semantic_version.Version``.
+        flags (dict): the version flags; see the ``flags``/``flags_str``
+            properties below.
 
     Unlike upstream, leading zeroes in the numeric components are accepted
     (``01.02.03.04``) and preserved by ``str()``; the stored values are
@@ -58,23 +60,34 @@ class Version(_BaseVersion):
     An optional lowercase ``v`` prefix is accepted and preserved too
     (``Version('v1.2.3')`` renders as ``'v1.2.3'`` and compares equal to
     ``Version('1.2.3')``).
+
+    Version flags follow the version: one or more ``!name[=value]`` sections
+    after everything else (``1.2.3!dbg!channel=beta``). The name matches
+    ``[a-zA-Z0-9._-]+``; the value is any text without ``!`` (may be empty,
+    or absent: ``!name``). Flags are preserved by ``str()`` and ignored in
+    all comparisons and calculations.
     """
 
     # Extra components are strictly numeric; leading zeroes are accepted and
     # preserved in ``str()``. The whole extra chunk is captured as one group,
     # then split on '.'. An optional lowercase 'v' prefix is accepted and
-    # preserved in ``str()`` as well.
+    # preserved in ``str()`` as well, and version flags may follow the
+    # version ('!name[=value]' sections, ignored by comparisons).
     version_re = re.compile(r'^(?:v)?(\d+)\.(\d+)\.(\d+)'
                             r'((?:\.\d+)*)'
                             r'(?:-([0-9a-zA-Z.-]+))?'
-                            r'(?:\+([0-9a-zA-Z.-]+))?$')
+                            r'(?:\+([0-9a-zA-Z.-]+))?'
+                            r'(?:![a-zA-Z0-9._-]+(?:=[^!]*)?)*$')
     partial_version_re = re.compile(r'^(?:v)?(\d+)'
                                     r'(?:\.(\d+)'
                                     r'(?:\.(\d+)'
                                     r'((?:\.\d+)*)?'
                                     r')?)?'
                                     r'(?:-([0-9a-zA-Z.-]*))?'
-                                    r'(?:\+([0-9a-zA-Z.-]*))?$')
+                                    r'(?:\+([0-9a-zA-Z.-]*))?'
+                                    r'(?:![a-zA-Z0-9._-]+(?:=[^!]*)?)*$')
+
+    _FLAG_NAME_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
 
     _PATCHN_RE = re.compile(r'^patch(\d+)$')
 
@@ -87,6 +100,7 @@ class Version(_BaseVersion):
             patches=None,
             prerelease=None,
             build=None,
+            flags=None,
             partial=False):
         if partial:
             warnings.warn(
@@ -95,7 +109,7 @@ class Version(_BaseVersion):
                 stacklevel=2,
             )
         has_text = version_string is not None
-        has_parts = not (major is minor is patch is patches is prerelease is build is None)
+        has_parts = not (major is minor is patch is patches is prerelease is build is flags is None)
         if not has_text ^ has_parts:
             raise ValueError("Call either Version('1.2.3') or Version(major=1, ...).")
 
@@ -104,7 +118,7 @@ class Version(_BaseVersion):
             # Keep the original spelling of the numeric components so that
             # str() preserves leading zeroes ('01.02.03' stays '01.02.03');
             # the stored values are ints, so comparison stays numeric.
-            raw_core = version_string.split('-', 1)[0].split('+', 1)[0]
+            raw_core = version_string.split('-', 1)[0].split('+', 1)[0].split('!', 1)[0]
             prefix = ''
             if raw_core.startswith('v'):
                 prefix = 'v'
@@ -115,6 +129,7 @@ class Version(_BaseVersion):
                 for i in range(3 + len(patches))
             )
             self._prefix = prefix
+            self._flags_raw = self._split_flags(version_string)
         else:
             # Convenience: allow to omit patches/prerelease/build.
             patches = tuple(patches or ())
@@ -143,6 +158,7 @@ class Version(_BaseVersion):
                 for part in (raw_major, raw_minor, raw_patch) + raw_patches
             )
             self._prefix = ''
+            self._flags_raw = self._normalize_flags_kwargs(flags)
             self._validate_kwargs(major, minor, patch, patches, prerelease, build, partial)
 
         self.major = major
@@ -197,6 +213,83 @@ class Version(_BaseVersion):
         if self._raw_parts is not None:
             return [part for part in self._raw_parts[3:] if part is not None]
         return [str(p) for p in self.patches]
+
+    @property
+    def flags(self):
+        """The version flags as a dict.
+
+        Flags follow the version (``1.2.3!dbg!channel=beta``). Repeated
+        names are allowed; the last occurrence wins, so
+        ``Version('1.2.3!a=1!a=2').flags`` returns ``{'a': '2'}``. A flag
+        without ``=value`` maps to ``None``; ``!name=`` maps to ``''``.
+        """
+        flags = {}
+        for name, value in self._flags_raw:
+            flags[name] = value
+        return flags
+
+    @property
+    def flags_str(self):
+        """The flags as a list of strings, in order, without the ``!``.
+
+        ``Version('1.2.3!dbg!channel=beta').flags_str`` returns
+        ``['dbg', 'channel=beta']``; it is ``[]`` when there are no flags.
+        """
+        return [
+            name if value is None else '%s=%s' % (name, value)
+            for name, value in self._flags_raw
+        ]
+
+    @staticmethod
+    def _split_flags(version_string):
+        """Extract the flags from an already-validated version string.
+
+        The first ``!`` starts the flag section (``!`` cannot appear
+        anywhere else in a valid version string). Returns a tuple of
+        ``(name, value)`` pairs; ``value`` is ``None`` for ``!name`` and
+        ``''`` for ``!name=``.
+        """
+        bang = version_string.find('!')
+        if bang == -1:
+            return ()
+        flags = []
+        for chunk in version_string[bang + 1:].split('!'):
+            name, sep, value = chunk.partition('=')
+            flags.append((name, value if sep else None))
+        return tuple(flags)
+
+    @classmethod
+    def _normalize_flags_kwargs(cls, flags):
+        """Validate and normalize the ``flags`` kwarg.
+
+        Accepts a dict (``{'dbg': None, 'channel': 'beta'}``) or an
+        iterable of ``(name, value)`` pairs. Returns the normalized tuple
+        of ``(name, value)`` pairs.
+        """
+        if flags is None:
+            return ()
+        if isinstance(flags, dict):
+            pairs = tuple(flags.items())
+        else:
+            try:
+                pairs = tuple(flags)
+            except TypeError:
+                pairs = None
+        try:
+            normalized = []
+            for pair in pairs:
+                if isinstance(pair, str):
+                    # A bare string would unpack char-by-char; require pairs.
+                    raise ValueError(pair)
+                name, value = pair
+                if not isinstance(name, str) or not cls._FLAG_NAME_RE.match(name):
+                    raise ValueError(name)
+                if value is not None and (not isinstance(value, str) or '!' in value):
+                    raise ValueError(value)
+                normalized.append((name, value))
+            return tuple(normalized)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid flags: %r" % (flags,))
 
     def _patches_key(self):
         """The ``patches`` tuple with insignificant trailing zeroes removed.
@@ -542,6 +635,11 @@ class Version(_BaseVersion):
             version = '%s-%s' % (version, '.'.join(self.prerelease))
         if self.build or (self.partial and self.build == ()):
             version = '%s+%s' % (version, '.'.join(self.build))
+        if self._flags_raw:
+            version = '%s%s' % (version, ''.join(
+                '!%s' % (name if value is None else '%s=%s' % (name, value))
+                for name, value in self._flags_raw
+            ))
         return version
 
     def __hash__(self):

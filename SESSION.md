@@ -30,6 +30,11 @@ components after the patch level (`1.2.3.4`, `1.2.3.4.5-dbg.1+b`).
 - An optional lowercase `v` prefix is accepted and preserved (`v1.2.3`
   stays `v1.2.3`, compares equal to `1.2.3`); `coerce()` accepts it too.
   Specs keep rejecting it (NpmSpec strips it, as upstream).
+- Version flags: trailing `!name[=value]` sections (name
+  `[a-zA-Z0-9._-]+`, value anything but `!`, may be empty/absent).
+  Preserved by `str()`, exposed via `v.flags` (dict, last occurrence
+  wins) and `v.flags_str` (ordered strings); ignored in comparisons,
+  hashing, equality and `next_*`/`truncate`. Kwargs accept `flags=`.
 - `next_patch()` bumps the least significant component (`1.2.3.4` -> `1.2.3.5`).
 - Spec syntaxes registered as `'simple-ex'` / `'npm-ex'` (the upstream
   registry rejects duplicates of `'simple'`/`'npm'`).
