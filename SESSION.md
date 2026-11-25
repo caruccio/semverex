@@ -38,6 +38,9 @@ components after the patch level (`1.2.3.4`, `1.2.3.4.5-dbg.1+b`).
 - `next_patch()` bumps the least significant component (`1.2.3.4` -> `1.2.3.5`).
 - Spec syntaxes registered as `'simple-ex'` / `'npm-ex'` (the upstream
   registry rejects duplicates of `'simple'`/`'npm'`).
+- Incomplete versions (`1`, `1.2`, `1-dbg`, `1.2-dbg`) are accepted
+  without `partial=True` — auto-detected as partial (missing components
+  are `None`), without the deprecation warning.
 
 ## Run tests
 

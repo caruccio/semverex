@@ -151,8 +151,8 @@ class ParsingTestCase(unittest.TestCase):
 
     def test_invalid_strings(self):
         for bad in [
-                '1.2', '1.2.3.dbg', '1.2.3..4', 'a.b.c', '', '1.2.3-',
-                '1.2.3+', '1.2.3.4.', '1.2.3.4-01', 'V1.2.3', 'v', 'vv1.2.3',
+                '1.2.3.dbg', '1.2.3..4', 'a.b.c', '',
+                '1.2.3.4.', '1.2.3.4-01', 'V1.2.3', 'v', 'vv1.2.3',
                 'v1.2.3v']:
             with self.assertRaises(ValueError, msg=bad):
                 Version(bad)
@@ -172,7 +172,62 @@ class ParsingTestCase(unittest.TestCase):
         for version_string, _ in self.CASES:
             self.assertTrue(validate(version_string), msg=version_string)
         self.assertFalse(validate('1.2.3.dbg'))
-        self.assertFalse(validate('1.2'))
+        # incomplete versions are valid
+        self.assertTrue(validate('1'))
+        self.assertTrue(validate('1.2'))
+        self.assertTrue(validate('1-dbg'))
+        self.assertTrue(validate('1.2-dbg'))
+
+
+class IncompleteVersionsTestCase(unittest.TestCase):
+    """Incomplete versions ('1', '1.2', '1-dbg', '1.2-dbg') are accepted
+    without partial=True."""
+
+    def test_parse_fields(self):
+        v = Version('1.2-dbg')
+        self.assertEqual((v.major, v.minor, v.patch), (1, 2, None))
+        self.assertEqual(v.prerelease, ('dbg',))
+        self.assertTrue(v.partial)
+
+        v = Version('1-dbg')
+        self.assertEqual((v.major, v.minor, v.patch), (1, None, None))
+        self.assertEqual(v.prerelease, ('dbg',))
+
+        v = Version('1.2')
+        self.assertEqual((v.major, v.minor, v.patch), (1, 2, None))
+        self.assertIsNone(v.prerelease)
+
+        v = Version('1')
+        self.assertEqual((v.major, v.minor, v.patch), (1, None, None))
+
+    def test_str_roundtrip(self):
+        for s in ['1', '1.2', '1-dbg', '1.2-dbg', '1.2+b', 'v1.2-dbg',
+                  '01.02-dbg', '1.2-dbg!x=1', '1.2.3.4-rc']:
+            self.assertEqual(str(Version(s)), s, msg=s)
+
+    def test_no_deprecation_warning_when_auto_detected(self):
+        # Explicit partial=True warns (upstream behavior); auto-detected
+        # incomplete versions do not.
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            Version('1.2-dbg')
+            Version('1')
+
+    def test_matches_explicit_partial(self):
+        self.assertEqual(Version('1.2-dbg'), Version('1.2-dbg', partial=True))
+        self.assertEqual(Version('1.2'), Version('1.2', partial=True))
+
+    def test_validate(self):
+        self.assertTrue(validate('1'))
+        self.assertTrue(validate('1.2'))
+        self.assertTrue(validate('1-dbg'))
+        self.assertTrue(validate('1.2-dbg'))
+        self.assertFalse(validate('1.2.3.dbg'))
+
+    def test_still_rejects_garbage(self):
+        for bad in ['1.2.3.', '1.2..', '1.2.3.dbg', 'a', '.1', '1.']:
+            with self.assertRaises(ValueError, msg=bad):
+                Version(bad)
 
 
 class LeadingZeroTestCase(unittest.TestCase):

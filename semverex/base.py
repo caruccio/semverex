@@ -66,6 +66,11 @@ class Version(_BaseVersion):
     ``[a-zA-Z0-9._-]+``; the value is any text without ``!`` (may be empty,
     or absent: ``!name``). Flags are preserved by ``str()`` and ignored in
     all comparisons and calculations.
+
+    Unlike upstream, incomplete versions are accepted without requiring
+    ``partial=True``: ``Version('1')``, ``Version('1.2')``,
+    ``Version('1-dbg')`` and ``Version('1.2-dbg')`` all parse (with the
+    missing components set to ``None`` and ``partial=True``).
     """
 
     # Extra components are strictly numeric; leading zeroes are accepted and
@@ -114,7 +119,16 @@ class Version(_BaseVersion):
             raise ValueError("Call either Version('1.2.3') or Version(major=1, ...).")
 
         if has_text:
-            major, minor, patch, patches, prerelease, build = self.parse(version_string, partial)
+            try:
+                major, minor, patch, patches, prerelease, build = self.parse(version_string, partial)
+                is_partial = partial
+            except ValueError:
+                if partial:
+                    raise
+                # Incomplete versions ('1', '1.2', '1-dbg', '1.2-dbg') are
+                # accepted: fall back to partial parsing.
+                major, minor, patch, patches, prerelease, build = self.parse(version_string, True)
+                is_partial = True
             # Keep the original spelling of the numeric components so that
             # str() preserves leading zeroes ('01.02.03' stays '01.02.03');
             # the stored values are ints, so comparison stays numeric.
@@ -160,6 +174,7 @@ class Version(_BaseVersion):
             self._prefix = ''
             self._flags_raw = self._normalize_flags_kwargs(flags)
             self._validate_kwargs(major, minor, patch, patches, prerelease, build, partial)
+            is_partial = partial
 
         self.major = major
         self.minor = minor
@@ -168,7 +183,7 @@ class Version(_BaseVersion):
         self.prerelease = prerelease
         self.build = build
 
-        self.partial = partial
+        self.partial = is_partial
 
         # Cached precedence keys
         # _cmp_precedence_key is used for semver-precedence comparison
@@ -1147,9 +1162,12 @@ def match(spec, version):
 
 
 def validate(version_string):
-    """Validates a version string againt the semverex version grammar."""
+    """Validates a version string againt the semverex version grammar.
+
+    Incomplete versions (``'1'``, ``'1.2'``, ``'1.2-dbg'``) are valid.
+    """
     try:
-        Version.parse(version_string)
+        Version(version_string)
         return True
     except ValueError:
         return False

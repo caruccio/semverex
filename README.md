@@ -51,6 +51,12 @@ preserved by `str()`, exposed as `v.flags` (dict, last occurrence wins)
 and `v.flags_str` (ordered list of strings), and are ignored in all
 comparisons and calculations.
 
+**Incomplete versions** are accepted without `partial=True`:
+`Version('1')`, `Version('1.2')`, `Version('1-dbg')` and
+`Version('1.2-dbg')` parse with the missing components set to `None`
+(and `v.partial == True`), without the deprecation warning that
+explicit `partial=True` carries.
+
 ## Usage
 
 ```python
@@ -142,13 +148,13 @@ Notes and caveats:
   components, so `semantic_version.Version('1.2.3') == semverex.Version('1.2.3.4')`
   is `True` on that side only. Comparisons with `semverex.Version` on the
   left are always correct.
-- Leading-zero components (`01.2.3`), a leading `v` prefix (`v1.2.3`) and
-  version flags (`1.2.3!dbg`) are rejected by upstream but accepted by
-  semverex — intentional divergences (`tests/test_compat.py` pins them).
-  Official SemVer strings behave identically. Specs
-  (`SimpleSpec`/`NpmSpec`) keep rejecting leading zeroes and `v` in their
-  components (`NpmSpec` still strips a leading `v` from spec expressions,
-  as upstream does).
+- Leading-zero components (`01.2.3`), a leading `v` prefix (`v1.2.3`),
+  version flags (`1.2.3!dbg`) and incomplete versions (`1.2`, `1-dbg`)
+  are rejected by upstream but accepted by semverex — intentional
+  divergences (`tests/test_compat.py` pins them). Official SemVer strings
+  behave identically. Specs (`SimpleSpec`/`NpmSpec`) keep rejecting
+  leading zeroes and `v` in their components (`NpmSpec` still strips a
+  leading `v` from spec expressions, as upstream does).
 
 ## Install / test
 

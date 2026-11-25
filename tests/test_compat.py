@@ -24,8 +24,8 @@ OFFICIAL_VERSIONS = [
 ]
 
 INVALID_BOTH = [
-    '1.2', '1.2.3-01', '1.2.3.', 'a.b.c',
-    '', '1.2.3-', '1.2.3+', '1.2.3..4', '1.2.3.dbg',
+    '1.2.3-01', '1.2.3.', 'a.b.c',
+    '', '1.2.3..4', '1.2.3.dbg',
 ]
 
 # Accepted by semverex (leading zeroes preserved in str()), rejected by
@@ -240,7 +240,7 @@ class CompatibilityTestCase(unittest.TestCase):
             results.append(sv.SimpleSpec('>=1.2.3').match(sv.Version('1.2.4')))
             results.append(sv.NpmSpec('~1.2').match(sv.Version('1.2.9')))
             results.append(sv.validate('1.2.3'))
-            results.append(sv.validate('1.2'))
+            results.append(sv.validate('1.2.3.dbg'))
             results.append(sv.compare('1.2.3', '1.2.4'))
             results.append([str(x) for x in sorted(
                 [sv.Version(s) for s in ['1.2.10', '1.2.3-rc.1', '1.2.3', '2.0.0']],
@@ -311,6 +311,19 @@ class ExtensionBoundaryTestCase(unittest.TestCase):
                 semantic_version.Version(s)
             v = semverex.Version(s)
             self.assertEqual(str(v), s)
+            self.assertTrue(semverex.validate(s))
+            self.assertFalse(semantic_version.validate(s))
+
+    def test_incomplete_versions_divergence_is_intentional(self):
+        # Upstream requires partial=True for incomplete versions; semverex
+        # accepts them directly, with missing components set to None.
+        for s in ['1', '1.2', '1-dbg', '1.2-dbg', '1.2.3-', '1.2.3+',
+                  'v1.2!x=1']:
+            with self.assertRaises(ValueError, msg=s):
+                semantic_version.Version(s)
+            v = semverex.Version(s)
+            self.assertEqual(str(v), s)
+            self.assertTrue(v.partial, msg=s)
             self.assertTrue(semverex.validate(s))
             self.assertFalse(semantic_version.validate(s))
 
